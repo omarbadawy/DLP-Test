@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DLP Test App</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f9; color: #333; padding: 20px; }
+    h1 { text-align: center; }
+    section { background: #fff; padding: 15px; margin: 20px auto; max-width: 700px;
+              border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    section h2 { margin-top: 0; }
+    input, select, textarea, button {
+      margin: 5px 0; padding: 8px; width: 100%;
+      border: 1px solid #ccc; border-radius: 6px;
+    }
+    button { background: #007bff; color: white; cursor: pointer; border: none; }
+    button:hover { background: #0056b3; }
+    .progress { width: 100%; height: 20px; border: 1px solid #333; border-radius: 5px; margin-top: 5px; }
+    .progress-bar { height: 100%; background: green; width: 0%; }
+    pre { background: #f1f1f1; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>🛡️ DLP Test UI</h1>
+
+  <!-- Fetch Requests -->
+  <section>
+    <h2>Send Request (Fetch)</h2>
+    <select id="fetchMethod">
+      <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+    </select>
+    <textarea id="fetchData" rows="3" placeholder="Enter data"></textarea>
+    <button onclick="sendFetch()">Send</button>
+    <pre id="fetchResult"></pre>
+  </section>
+
+  <!-- Form Requests -->
+  <section>
+    <h2>Send Request (Form)</h2>
+    <form id="formReq">
+      <select name="_method">
+        <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option>
+      </select>
+      <textarea name="data" rows="3" placeholder="Enter data"></textarea>
+      <button type="submit">Send</button>
+    </form>
+    <pre id="formResult"></pre>
+  </section>
+
+  <!-- Upload File via Fetch -->
+  <section>
+    <h2>Upload File (Fetch)</h2>
+    <input type="file" id="fetchFile">
+    <button onclick="uploadFetch()">Upload</button>
+    <div class="progress"><div class="progress-bar" id="fetchProgress"></div></div>
+    <pre id="fetchUploadResult"></pre>
+  </section>
+
+  <!-- Upload File via Form -->
+  <section>
+    <h2>Upload File (Form)</h2>
+    <form id="formFile" method="POST" enctype="multipart/form-data" action="/upload">
+      <input type="file" name="file">
+      <button type="submit">Upload</button>
+    </form>
+    <pre id="formUploadResult"></pre>
+  </section>
+
+  <!-- Upload File via GET -->
+  <section>
+    <h2>Upload File (GET base64 in query)</h2>
+    <input type="file" id="getFile">
+    <button onclick="uploadGet()">Upload via GET</button>
+    <pre id="getFileResult"></pre>
+  </section>
+
+  <!-- WebSockets -->
+  <section>
+    <h2>WebSockets</h2>
+    <button onclick="connectWS()">Connect</button>
+    <input type="text" id="wsText" placeholder="Enter message">
+    <button onclick="sendWSText()">Send Text</button>
+    <input type="file" id="wsFile">
+    <button onclick="sendWSFile()">Send File</button>
+    <pre id="wsResult"></pre>
+  </section>
+
+<script>
+  // Send fetch request
+  async function sendFetch() {
+    const method = document.getElementById("fetchMethod").value;
+    const data = document.getElementById("fetchData").value;
+
+    let url = `/api/${method.toLowerCase()}`;
+    let options = { method };
+
+    if (method === "GET") {
+      url += `?data=${encodeURIComponent(data)}`;
+    } else {
+      options.body = JSON.stringify({ data });
+      options.headers = { "Content-Type": "application/json" };
+    }
+
+    const res = await fetch(url, options);
+    document.getElementById("fetchResult").textContent = await res.text();
+  }
+
+  // Send form request
+  document.getElementById("formReq").onsubmit = async function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const method = formData.get("_method");
+    console.log(new URLSearchParams(formData).toString())
+    if (method === "GET") {
+      const res = await fetch(`/api/${method.toLowerCase()}?data=${new URLSearchParams(formData).toString()}`);
+          document.getElementById("formResult").textContent = await res.text();
+    } else {
+      const res = await fetch(`/api/${method.toLowerCase()}`, { method, body: formData }); 
+          document.getElementById("formResult").textContent = await res.text();
+    }
+  };
+
+  // Upload fetch
+  function uploadFetch() {
+    const file = document.getElementById("fetchFile").files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/upload", true);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const percent = (e.loaded / e.total) * 100;
+        document.getElementById("fetchProgress").style.width = percent + "%";
+      }
+    };
+
+    xhr.onload = () => {
+      document.getElementById("fetchUploadResult").textContent = xhr.responseText;
+    };
+
+    xhr.send(formData);
+  }
+
+  // Upload form
+  document.getElementById("formFile").onsubmit = async function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const res = await fetch("/upload", { method: "POST", body: formData });
+    document.getElementById("formUploadResult").textContent = await res.text();
+  };
+
+  // Upload via GET
+  function uploadGet() {
+    const file = document.getElementById("getFile").files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(",")[1];
+      const url = `/upload-get?filename=${encodeURIComponent(file.name)}&data=${encodeURIComponent(base64)}`;
+      const res = await fetch(url);
+      document.getElementById("getFileResult").textContent = await res.text();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // WebSockets
+  let ws;
+  function connectWS() {
+    ws = new WebSocket(`ws://${location.host}`);
+    ws.onopen = () => { document.getElementById("wsResult").textContent += "Connected ✅\n"; };
+    ws.onmessage = (msg) => { document.getElementById("wsResult").textContent += msg.data + "\n"; };
+    ws.onclose = () => { document.getElementById("wsResult").textContent += "Closed ❌\n"; };
+  }
+
+  function sendWSText() {
+    const text = document.getElementById("wsText").value;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "text", content: text }));
+    }
+  }
+
+  function sendWSFile() {
+    const file = document.getElementById("wsFile").files[0];
+    if (file && ws && ws.readyState === WebSocket.OPEN) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        ws.send(JSON.stringify({ type: "file", filename: file.name, content: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+</script>
+</body>
+</html>
