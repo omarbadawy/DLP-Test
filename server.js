@@ -107,6 +107,7 @@ wss.on("connection", (ws) => {
 
 
 ws.on("message", (message, isBinary) => {
+  console.log(message.toString())
   if (!isBinary) {
     try {
       const meta = JSON.parse(message.toString());
@@ -115,11 +116,14 @@ ws.on("message", (message, isBinary) => {
         return;
       }
     } catch {
+      
+    }
+    // } catch {
       // Regular text
       const text = message.toString();
       console.log("💬 WS Text:", text);
       ws.send(JSON.stringify({ echo: text }));
-    }
+   // }
   } else {
     // Save file with original extension
     const filename = currentFilename || `ws-${Date.now()}.bin`;
