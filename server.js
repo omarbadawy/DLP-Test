@@ -97,6 +97,27 @@ app.get("/upload-get", (req, res) => {
   }
 });
 
+app.post("/upload-post", (req, res) => {
+  const { filename, data } = req.body;
+  if (!filename || !data) {
+    return res.status(400).json({ error: "Missing filename or data" });
+  }
+
+  try {
+    const buffer = Buffer.from(data, "base64");
+    const safeName = Date.now() + "-" + filename;
+    const filepath = path.join(__dirname, "uploads", safeName);
+    fs.writeFileSync(filepath, buffer);
+    console.log("📂 File uploaded via GET:", filename);
+
+    const fileUrl = `${siteURL}/uploads/${safeName}`;
+    res.json({ message: "File uploaded successfully (GET base64) ✅", fileUrl });
+  } catch (err) {
+    console.error("❌ Error saving base64 file:", err);
+    res.status(500).json({ error: "Failed to save file" });
+  }
+});
+
 // ===== WebSocket Server =====
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);

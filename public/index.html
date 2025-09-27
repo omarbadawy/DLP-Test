@@ -121,6 +121,14 @@
     <pre id="uploadBase64Result"></pre>
   </section>
 
+  <!-- File Upload (POST base64) -->
+  <section>
+    <h2>Upload File (POST with Base64 in body)</h2>
+    <input type="file" id="fileBase64Input2" />
+    <button onclick="uploadFileBase64Post()">Upload via POST</button>
+    <pre id="uploadBase64Result2"></pre>
+  </section>
+
   <!-- WebSockets -->
   <section>
     <h2>WebSocket</h2>
@@ -212,6 +220,24 @@
       const url = `/upload-get?filename=${encodeURIComponent(file.name)}&data=${encodeURIComponent(base64)}`;
       const res = await fetch(url);
       showResult("uploadBase64Result", await res.text());
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function uploadFileBase64Post() {
+    const file = document.getElementById("fileBase64Input2").files[0];
+    if (!file) return alert("Choose a file");
+
+    const reader = new FileReader();
+    reader.onload = async function() {
+      const base64 = reader.result.split(",")[1];
+      const url = `/upload-post`;
+      const options = {}
+      options.headers = { "Content-Type": "application/json" };
+      options.body = JSON.stringify({ filename: file.name, data: base64 });
+      options.method = "POST"
+      const res = await fetch(url, options);
+      showResult("uploadBase64Result2", await res.text());
     };
     reader.readAsDataURL(file);
   }
