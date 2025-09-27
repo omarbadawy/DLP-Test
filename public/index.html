@@ -217,7 +217,8 @@
   }
 
   // WebSockets
-  const ws = new WebSocket(`ws://${location.host}`);
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
   ws.onopen = () => showResult("wsResult", "Connected to WS ✅");
   ws.onmessage = (msg) => showResult("wsResult", msg.data);
   ws.onclose = () => showResult("wsResult", "WS Disconnected ❌");

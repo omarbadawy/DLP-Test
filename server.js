@@ -54,7 +54,7 @@ app.all("/api", (req, res) => {
   console.log("Body:", req.body);
 
   res.json({
-    message: "Echo from server",
+    message: "Echo from server ✅",
     method: req.method,
     query: req.query,
     body: req.body
@@ -86,7 +86,7 @@ app.get("/upload-get", (req, res) => {
     console.log("📂 File uploaded via GET:", filename);
 
     const fileUrl = `http://localhost:${PORT}/uploads/${safeName}`;
-    res.json({ message: "File uploaded successfully (GET base64)", fileUrl });
+    res.json({ message: "File uploaded successfully (GET base64) ✅", fileUrl });
   } catch (err) {
     console.error("❌ Error saving base64 file:", err);
     res.status(500).json({ error: "Failed to save file" });
@@ -128,7 +128,7 @@ ws.on("message", (message, isBinary) => {
     console.log("📂 File uploaded via WS:", filename);
 
     const fileUrl = `http://localhost:${PORT}/uploads/${filename}`;
-    ws.send(JSON.stringify({ message: "File uploaded via WS", fileUrl }));
+    ws.send(JSON.stringify({ message: "File uploaded via WS ✅", fileUrl }));
 
     currentFilename = null;
   }
