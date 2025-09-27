@@ -5,7 +5,11 @@ import fs from "fs";
 import path from "path";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
+import "dotenv/config";
 
+const siteURL = process.env.NODE_ENV === "production" ? "https://restaurant-api-vxnd.onrender.com" : "http://localhost:3000"
+
+console.log(siteURL)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -67,7 +71,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+  const fileUrl = `${siteURL}/uploads/${req.file.filename}`;
   res.json({ message: "File uploaded successfully", fileUrl });
 });
 
@@ -85,7 +89,7 @@ app.get("/upload-get", (req, res) => {
     fs.writeFileSync(filepath, buffer);
     console.log("📂 File uploaded via GET:", filename);
 
-    const fileUrl = `http://localhost:${PORT}/uploads/${safeName}`;
+    const fileUrl = `${siteURL}/uploads/${safeName}`;
     res.json({ message: "File uploaded successfully (GET base64) ✅", fileUrl });
   } catch (err) {
     console.error("❌ Error saving base64 file:", err);
@@ -116,7 +120,7 @@ ws.on("message", (message, isBinary) => {
         return;
       }
     } catch {
-      
+
     }
     // } catch {
       // Regular text
@@ -131,7 +135,7 @@ ws.on("message", (message, isBinary) => {
     fs.writeFileSync(filepath, message);
     console.log("📂 File uploaded via WS:", filename);
 
-    const fileUrl = `http://localhost:${PORT}/uploads/${filename}`;
+    const fileUrl = `${siteURL}/uploads/${filename}`;
     ws.send(JSON.stringify({ message: "File uploaded via WS ✅", fileUrl }));
 
     currentFilename = null;
