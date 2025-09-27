@@ -1,93 +1,141 @@
 import express from "express";
-import fileUpload from "express-fileupload";
-import { WebSocketServer } from "ws";
+import cors from "cors";
+import multer from "multer";
+import fs from "fs";
 import path from "path";
+import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
-
-const app = express();
-const PORT = process.env.PORT || 3000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+const PORT = 3000;
+
+// ===== Middleware =====
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(fileUpload());
+
+// Serve static files (uploads + index.html)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use(express.static(__dirname));
+
+// Ensure uploads folder exists
+if (!fs.existsSync(path.join(__dirname, "uploads"))) {
+  fs.mkdirSync(path.join(__dirname, "uploads"));
+}
+
+// ===== Multer for file uploads =====
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  }
+});
+const upload = multer({ storage });
+
+// ===== Routes =====
+
+// Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// Universal API endpoint
-app.all("/api/:method", (req, res) => {
-  console.log("📩 Request received:");
-  console.log(" Method:", req.method);
-  console.log(" Path:", req.originalUrl);
-  console.log(" Query:", req.query);
-  console.log(" Body:", req.body);
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Generic echo API
+app.all("/api", (req, res) => {
+  console.log(`📩 [${req.method}] /api`);
+  console.log("Query:", req.query);
+  console.log("Body:", req.body);
 
   res.json({
-    message: "Echo from server ✅",
+    message: "Echo from server",
     method: req.method,
-    path: req.originalUrl,
-    headers: req.headers,
-    body: req.body,
     query: req.query,
+    body: req.body
   });
 });
 
-// File upload with POST
-app.post("/upload", (req, res) => {
-  console.log("📂 File upload POST request");
-  if (!req.files || Object.keys(req.files).length === 0) {
-    return res.status(400).json({ error: "No files uploaded" });
+// Upload via POST (fetch or form)
+app.post("/upload", upload.single("file"), (req, res) => {
+  console.log("📂 File uploaded via POST:", req.file?.originalname);
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
   }
-  console.log(" Uploaded files:", Object.keys(req.files));
-  res.json({
-    message: "File uploaded successfully ✅",
-    files: Object.keys(req.files),
-  });
+  const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+  res.json({ message: "File uploaded successfully", fileUrl });
 });
 
-// File upload via GET (base64 in query)
+// Upload via GET with base64 query
 app.get("/upload-get", (req, res) => {
   const { filename, data } = req.query;
-  console.log("📂 File upload GET request");
   if (!filename || !data) {
     return res.status(400).json({ error: "Missing filename or data" });
   }
-  console.log(" Uploaded file:", filename, " size:", Buffer.from(data, "base64").length);
-  res.json({
-    message: "File uploaded successfully via GET ✅",
-    filename,
-    size: Buffer.from(data, "base64").length,
-  });
+
+  try {
+    const buffer = Buffer.from(data, "base64");
+    const safeName = Date.now() + "-" + filename;
+    const filepath = path.join(__dirname, "uploads", safeName);
+    fs.writeFileSync(filepath, buffer);
+    console.log("📂 File uploaded via GET:", filename);
+
+    const fileUrl = `http://localhost:${PORT}/uploads/${safeName}`;
+    res.json({ message: "File uploaded successfully (GET base64)", fileUrl });
+  } catch (err) {
+    console.error("❌ Error saving base64 file:", err);
+    res.status(500).json({ error: "Failed to save file" });
+  }
 });
 
-// Start server
+// ===== WebSocket Server =====
 const server = app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
 
-// WebSocket
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
-  console.log("🔗 WebSocket connected");
+  console.log("🔗 WebSocket client connected");
 
-  ws.on("message", (msg) => {
+  let currentFilename = null;
+
+
+ws.on("message", (message, isBinary) => {
+  if (!isBinary) {
     try {
-      const data = JSON.parse(msg);
-
-      if (data.type === "text") {
-        console.log("💬 WS Text:", data.content);
-        ws.send(JSON.stringify({ echo: data.content }));
-      } else if (data.type === "file") {
-        console.log("📂 WS File:", data.filename);
-        ws.send(JSON.stringify({ message: `File "${data.filename}" uploaded successfully ✅` }));
+      const meta = JSON.parse(message.toString());
+      if (meta.filename) {
+        currentFilename = Date.now() + "-" + meta.filename;
+        return;
       }
-    } catch (e) {
-      console.log("⚠️ WS Error parsing message:", e.message);
-      ws.send("ERR: Invalid message format");
+    } catch {
+      // Regular text
+      const text = message.toString();
+      console.log("💬 WS Text:", text);
+      ws.send(JSON.stringify({ echo: text }));
     }
-  });
+  } else {
+    // Save file with original extension
+    const filename = currentFilename || `ws-${Date.now()}.bin`;
+    const filepath = path.join(__dirname, "uploads", filename);
+    fs.writeFileSync(filepath, message);
+    console.log("📂 File uploaded via WS:", filename);
 
-  ws.on("close", () => console.log("❌ WebSocket disconnected"));
+    const fileUrl = `http://localhost:${PORT}/uploads/${filename}`;
+    ws.send(JSON.stringify({ message: "File uploaded via WS", fileUrl }));
+
+    currentFilename = null;
+  }
+});
+
+
+  ws.on("close", () => {
+    console.log("❌ WebSocket client disconnected");
+  });
 });
